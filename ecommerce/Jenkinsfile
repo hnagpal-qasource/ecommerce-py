@@ -1,0 +1,46 @@
+pipeline {
+    agent none
+
+    environment {
+        IMAGE_NAME = "ecommerce-app"
+    }
+
+    stages {
+        stage('Build Image with Kaniko (TAR only)') {
+            agent {
+                kubernetes {
+                    yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:v1.23.2
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: workspace
+      mountPath: /workspace
+  volumes:
+  - name: workspace
+    emptyDir: {}
+"""
+                }
+            }
+
+            steps {
+                container('kaniko') {
+                    sh '''
+                    /kaniko/executor \
+                      --context `pwd` \
+                      --dockerfile Dockerfile \
+                      --tar-path=/workspace/${IMAGE_NAME}.tar \
+                      --no-push \
+                      --verbosity=info
+                    '''
+                }
+
+                archiveArtifacts artifacts: '*.tar', fingerprint: true
+            }
+        }
+    }
+}
