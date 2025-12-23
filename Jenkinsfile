@@ -1,46 +1,43 @@
 pipeline {
-    agent { label 'linux-deploy' }  
+    agent { label 'linux-agent-machine-110' }
 
     environment {
-        IMAGE_NAME = "django-ecommerce"
         IMAGE_TAR  = "django-ecommerce.tar"
+        GIT_REPO   = "https://github.com/hnagpal-qasource/ecommerce-py.git"
+        GIT_BRANCH = "test"
     }
 
     stages {
-        stage('Checkout Source') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build Docker Image with Kaniko (TAR only)') {
+        stage('Checkout Source (on Agent)') {
             steps {
                 sh '''
-                echo "Starting Kaniko build on VM agent"
-
-                /kaniko/executor \
-                  --context `pwd` \
-                  --dockerfile Dockerfile \
-                  --tar-path=${IMAGE_TAR} \
-                  --no-push \
-                  --verbosity=info
+                  rm -rf src
+                  git clone -b ${GIT_BRANCH} ${GIT_REPO} src
                 '''
             }
         }
+stage('Build Docker Image with Kaniko') {
+    steps {
+        sh '''
+          cd src
+
+docker run --rm \
+  -v $(pwd):/workspace \
+  gcr.io/kaniko-project/executor:debug \
+  --context=/workspace \
+  --dockerfile=/workspace/Dockerfile \
+  --tar-path=/workspace/django-ecommerce.tar \
+  --no-push
+
+        '''
+    }
+}
 
         stage('Archive Image') {
             steps {
+                sh 'mv src/${IMAGE_TAR} .'
                 archiveArtifacts artifacts: '*.tar', fingerprint: true
             }
-        }
-    }
-
-    post {
-        success {
-            echo "Docker image built and archived successfully"
-        }
-        failure {
-            echo "Kaniko build failed"
         }
     }
 }
